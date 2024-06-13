@@ -1,0 +1,39 @@
+version: '3.1'
+
+networks:
+  my-net:
+    driver: bridge
+
+volumes:
+  db:
+    driver: local
+
+services:
+  ex1:
+    image: ex1:test
+    restart: always
+    ports:
+      - 9100:9100
+    environment:
+      MARIADB_DATABASE: mydb 
+      MARIADB_ROOT_PASSWORD: secret0
+      MARIADB_HOST: mariadb 
+      MARIADB_READONLY_HOST: mariadb
+      MARIADB_PORT: 3306
+      MARIADB_USER: user1
+      MARIADB_PASSWORD: secret1
+    networks:
+      - my-net
+
+  mariadb:
+    image: mariadb:latest
+    restart: always
+    environment:
+      MARIADB_DATABASE: mydb 
+      MARIADB_USER: user1
+      MARIADB_PASSWORD: secret1
+      MARIADB_ROOT_PASSWORD: secret0
+    volumes:
+      - db:/var/lib/mysql
+    networks:
+      - my-net

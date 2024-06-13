@@ -1,0 +1,62 @@
+name: Branch を Push したらイメージをビルドする
+
+on:
+  push:
+    branches:
+      - '*'         # matches every branch that doesn't contain a '/'
+      - '*/*'       # matches every branch containing a single '/'
+      - '**'        # matches every branch
+      - '!main'     # excludes main
+
+env:
+  IMAGE_NAME: ex5:dev
+
+jobs:
+  build-test-image:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'maven'
+      - name: Build with Maven
+        run: mvn -B package --file pom.xml
+
+      - name: Check Dockerfile 
+        run: |
+          docker run --rm -i hadolint/hadolint < Dockerfile
+
+      - name: Build a image
+        id: push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          tags: ${{ env.IMAGE_NAME }}
+          labels: ${{ env.IMAGE_NAME }}
+
+      - name: Check vulnerabilities 
+        run: |
+          docker images
+          docker run -v /var/run/docker.sock:/var/run/docker.sock --rm aquasec/trivy image --no-progress ${{ env.IMAGE_NAME }}
+
+      - name: Start a container from the image
+        run: |
+          docker images
+          docker run -d --name test -p 9500:8080 ${{ env.IMAGE_NAME }}
+          docker ps -a
+
+      - name: Test the container
+        run: |
+          sleep 10
+          curl --silent --retry 3 --include  http://127.0.0.1:9500/ping | grep "HTTP/1.1 200" 
+          [ $? -ne 0 ] && (echo "error"; exit 1)
+          exit 0
+
